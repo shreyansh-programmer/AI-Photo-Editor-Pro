@@ -1,0 +1,30 @@
+graph TD
+    A[User Interface / Editor Canvas] --> B{AI Coordinator}
+    
+    subgraph "Hybrid AI Pipeline"
+        B --> C[Local Image Processing Engine]
+        B --> D[Local Machine Learning Inference]
+        B --> E[Cloud AI Copilot]
+    end
+
+    subgraph "Local Image Processing (OpenCV / C++)"
+        C --> C1[AccentAI: Histogram & Tone Mapping]
+        C --> C2[SkyAI: Semantic Detection & fBm Clouds]
+        C --> C3[NoiselessAI: fastNlMeans & Guided Filters]
+        C --> C4[SupersharpAI: Multi-Scale Unsharp Mask]
+        C --> C5[EraseAI: Navier-Stokes Inpainting]
+    end
+
+    subgraph "Local ML Inference (ONNX / HuggingFace / PyTorch)"
+        D --> D1[BackgroundAI: rembg / u2net ONNX]
+        D --> D2[RelightAI: HF Depth Anything v2]
+        D --> D3[PortraitAI: MediaPipe Face Mesh / Haar]
+    end
+
+    subgraph "Cloud Assistant (OpenRouter API)"
+        E --> E1[Vision Model: NVIDIA Nemotron-3-Nano]
+        E --> E2[Text Fallback: Llama 3 / Ring-2.6]
+        E1 --> E3[Command Parser]
+        E2 --> E3
+        E3 -->|"[EXECUTE: tool, val]"| A
+    end
