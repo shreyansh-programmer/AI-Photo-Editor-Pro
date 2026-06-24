@@ -104,13 +104,13 @@ class MainWindow(QMainWindow):
         self.btn_library.setCheckable(True)
         self.btn_library.setChecked(True)
         self.btn_library.clicked.connect(lambda: self._switch_module(0))
-        self.btn_library.setStyleSheet("QPushButton { font-weight: bold; border: none; padding: 0 16px; color: #71717a; } QPushButton:checked { color: #a78bfa; }")
+        self.btn_library.setObjectName("moduleBtn")
         tb_layout.addWidget(self.btn_library)
 
         self.btn_develop = QPushButton("DEVELOP")
         self.btn_develop.setCheckable(True)
         self.btn_develop.clicked.connect(lambda: self._switch_module(1))
-        self.btn_develop.setStyleSheet("QPushButton { font-weight: bold; border: none; padding: 0 16px; color: #71717a; } QPushButton:checked { color: #a78bfa; }")
+        self.btn_develop.setObjectName("moduleBtn")
         tb_layout.addWidget(self.btn_develop)
         tb_layout.addStretch()
 
@@ -238,7 +238,7 @@ class MainWindow(QMainWindow):
         self.copilot_dock = QDockWidget("🧠 Advance Copilot", self)
         self.copilot_dock.setAllowedAreas(Qt.DockWidgetArea.LeftDockWidgetArea | Qt.DockWidgetArea.RightDockWidgetArea)
         self.copilot_dock.setWidget(self._copilot_panel)
-        self.copilot_dock.setStyleSheet("QDockWidget::title { background: #0f070a; color: #fbcfe8; font-weight: bold; padding: 4px; border-bottom: 1px solid rgba(236,72,153,0.2); }")
+        self.copilot_dock.setObjectName("copilotDock")
         
         # Dock it to the left side by default
         self.addDockWidget(Qt.DockWidgetArea.LeftDockWidgetArea, self.copilot_dock)
@@ -299,7 +299,7 @@ class MainWindow(QMainWindow):
         wl.addWidget(sub)
 
         hint = QLabel("Drop an image here or press Ctrl+O")
-        hint.setStyleSheet("color: #3f3f46; font-size: 12px; padding-bottom: 24px;")
+        hint.setObjectName("welcomeHint")
         hint.setAlignment(Qt.AlignmentFlag.AlignCenter)
         wl.addWidget(hint)
 
@@ -311,7 +311,7 @@ class MainWindow(QMainWindow):
 
         # Model info
         model_info = QLabel("\n🧠 rembg (u2net)  ·  Depth Anything V2  ·  OpenCV DNN")
-        model_info.setStyleSheet("color: #27272a; font-size: 11px; padding-top: 24px;")
+        model_info.setObjectName("welcomeModelInfo")
         model_info.setAlignment(Qt.AlignmentFlag.AlignCenter)
         wl.addWidget(model_info)
 
@@ -327,6 +327,12 @@ class MainWindow(QMainWindow):
         self._add_action(file_menu, "Export WebP", "", lambda: self._export("webp"))
         file_menu.addSeparator()
         self._add_action(file_menu, "Exit", "Alt+F4", self.close)
+
+        # NEW: Agent Menu
+        agent_menu = mb.addMenu("Agent")
+        self._add_action(agent_menu, "Show Command Bar", "Ctrl+K", self._show_command_bar)
+        self._add_action(agent_menu, "Analyze Image", "", self._copilot_panel._analyze_image)
+        self._add_action(agent_menu, "Auto-Pilot", "", self._copilot_panel._auto_pilot)
 
         edit_menu = mb.addMenu("Edit")
         self._add_action(edit_menu, "Undo", "Ctrl+Z", self._undo)
@@ -363,6 +369,13 @@ class MainWindow(QMainWindow):
         self.canvas.cursor_pos_changed.connect(lambda x, y: self._pos_label.setText(f"{x}, {y}"))
         self._copilot_panel.request_image.connect(self._on_copilot_request_image)
         self._copilot_panel.execute_command.connect(self._on_copilot_execute)
+        self._current_mask = None # NEW: Store active mask
+
+        # NEW: Dynamic accent color based on image
+        self._dominant_color_timer = QTimer()
+        self._dominant_color_timer.setSingleShot(True)
+        self._dominant_color_timer.setInterval(500)
+        self._dominant_color_timer.timeout.connect(self._update_dynamic_accent_color)
 
     # ─── File Operations ──────────────────────────────────
 
@@ -688,24 +701,51 @@ class MainWindow(QMainWindow):
         else:
             self._copilot_panel.receive_image(None)
             
-    def _on_copilot_execute(self, tool, value_str):
-        if tool == "apply_ai":
-            self._on_ai_action(value_str, {})
-            return
-            
-        try:
-            val = float(value_str)
-        except:
-            return
-            
-        # Update slider in UI directly (this will trigger adjustment_changed and re-render)
-        if tool in self._adj_panel.sliders:
-            slider = self._adj_panel.sliders[tool]
-            # Need to map values depending on the slider's range, but for now we assume Copilot uses the actual slider values [-100, 100]
-            if hasattr(slider, 'set_value'):
-                slider.set_value(val)
-            elif hasattr(slider, 'setValue'):
-                slider.setValue(int(val))
+    def _on_copilot_execute(self, command):
+        tool_name = command["tool"]
+        value = command.get("value")
+        mask_id = command.get("mask_id")
+        adj_tool = command.get("adj_tool")
+
+        self.statusBar().showMessage(f"AI applying: {tool_name}")
+        self.canvas.show_ai_processing(f"Applying {tool_name.replace("adjust_", "").replace("apply_ai_", "")}")
+
+        if tool_name.startswith("adjust_"):
+            if mask_id:
+                active_layer = self.layers.get_active_layer()
+                if active_layer and self._current_mask is not None:
+                    self._apply_masked_adjustment(active_layer, self._current_mask, adj_tool, value)
+            else:
+                self._adj_panel.set_slider_value(tool_name[7:], value)
+        elif tool_name.startswith("apply_ai_"):
+            ai_action_name = tool_name[9:]
+            if ai_action_name == "accent":
+                self._on_ai_action("accent", {"intensity": 50})
+            elif ai_action_name == "sky":
+                self._on_ai_action("sky", {"sky_type": "blue", "blend": 70})
+            elif ai_action_name == "portrait":
+                self._on_ai_action("portrait", {"skin_smooth": 50, "eye_enhance": 30})
+            elif ai_action_name == "bg_blur":
+                self._on_ai_action("bg_blur", {})
+            elif ai_action_name == "hdr":
+                self._on_ai_action("hdr", {})
+            elif ai_action_name == "lens":
+                self._on_ai_action("lens", {})
+            elif ai_action_name == "style":
+                self._on_ai_action("style", {})
+            elif ai_action_name == "wb":
+                self._on_ai_action("wb", {})
+        elif tool_name == "generate_mask_skin":
+            self._generate_mask("skin")
+        elif tool_name == "generate_mask_sky":
+            self._generate_mask("sky")
+        elif tool_name == "apply_adjustment_to_mask":
+            active_layer = self.layers.get_active_layer()
+            if active_layer and self._current_mask is not None:
+                self._apply_masked_adjustment(active_layer, self._current_mask, adj_tool, value)
+
+        self.canvas.hide_ai_processing()
+        self.statusBar().showMessage(f"AI action completed: {tool_name}", 3000)
 
     # ─── Layer Actions ────────────────────────────────────
 
@@ -888,3 +928,271 @@ class MainWindow(QMainWindow):
     def mouseDoubleClickEvent(self, event):
         if event.position().y() < 40:
             self._toggle_maximize()
+
+    # NEW: Dynamic Accent Color
+    def _update_dynamic_accent_color(self):
+        if self.layers.compose() is not None:
+            img = self.layers.compose()
+            # Use a simple method to find dominant color (e.g., k-means on a downscaled image)
+            # For simplicity, let's just take the average color for now
+            avg_color = np.mean(img, axis=(0, 1)).astype(int)
+            # Convert BGR to RGB
+            r, g, b = avg_color[2], avg_color[1], avg_color[0]
+            # Set a CSS variable or update stylesheet directly
+            # For now, we'll just print it. Actual implementation would involve QSS.
+            # print(f"Dominant color: RGB({r}, {g}, {b})")
+            # Example: self.setStyleSheet(self.styleSheet() + f"#dynamicAccent {{ background-color: rgb({r},{g},{b}); }}")
+
+    # NEW: Command Bar
+    def _show_command_bar(self):
+        # This will be a new QLineEdit overlay or similar
+        # For now, just a placeholder
+        self.statusBar().showMessage("Command Bar (Ctrl+K) activated! Type your command.", 3000)
+
+    # NEW: Mask Generation
+    def _generate_mask(self, mask_type):
+        active_layer = self.layers.get_active_layer()
+        if active_layer and active_layer.image is not None:
+            self.canvas.show_ai_processing(f"Generating {mask_type} mask...")
+            # This would ideally be an AIWorker task
+            if mask_type == "skin":
+                from engine.ai_advanced import FaceAI
+                mask = FaceAI.detect_skin(active_layer.image)
+            elif mask_type == "sky":
+                from engine.ai_engine import SkyAI
+                mask = SkyAI.detect_sky(active_layer.image)
+            else:
+                mask = None
+
+            if mask is not None:
+                self._current_mask = mask # Store the generated mask
+                self.canvas.set_brush_mask(mask) # Visualize the mask
+                self.statusBar().showMessage(f"{mask_type.capitalize()} mask generated.", 3000)
+            else:
+                self.statusBar().showMessage(f"Failed to generate {mask_type} mask.", 3000)
+            self.canvas.hide_ai_processing()
+
+    # NEW: Apply Masked Adjustment
+    def _apply_masked_adjustment(self, layer, mask, adj_tool_name, value):
+        if layer.image is None or mask is None:
+            return
+
+        self.canvas.show_ai_processing(f"Applying {adj_tool_name} to masked area...")
+
+        from engine.ai_advanced import MaskAI
+        from engine.image_processor import ImageProcessor
+
+        # Get the adjustment function from ImageProcessor
+        method = getattr(ImageProcessor, adj_tool_name, None)
+        if method:
+            # Apply the adjustment only to the masked area
+            adjusted_image = MaskAI.apply_adjustment_with_mask(layer.image, mask, method, value)
+            # Create a new layer with the adjusted image and clear the mask
+            new_layer = self.layers.add_layer(f"{layer.name} ({adj_tool_name} masked)", adjusted_image, layer_type=\'pixel\')
+            self.layers.set_active_layer(new_layer.id)
+            self.canvas.set_image(self.layers.compose())
+            self.canvas.clear_brush_mask()
+            self._current_mask = None
+            self.statusBar().showMessage(f"{adj_tool_name} applied to masked area.", 3000)
+        else:
+            self.statusBar().showMessage(f"Unknown adjustment tool: {adj_tool_name}", 3000)
+
+        self.canvas.hide_ai_processing()
+
+    # NEW: Function to update UI elements based on the current image
+    def _update_ui_from_image(self):
+        self._dominant_color_timer.start() # Trigger dynamic accent color update
+        self.canvas.fit_to_view()
+        self._update_layer_list()
+        self._update_adjustment_panel()
+        self._update_filter_panel()
+        self._update_curves_panel()
+
+    # Override the existing _on_file_loaded to include UI updates
+    def _on_file_loaded(self, img_path):
+        try:
+            img = cv2.imread(img_path)
+            if img is None:
+                raise ValueError("Could not load image.")
+            
+            # Clear existing layers and add the new image as a base layer
+            self.layers.clear()
+            self.layers.add_layer(os.path.basename(img_path), img)
+            self.canvas.set_image(self.layers.compose())
+            self.statusBar().showMessage(f"Loaded {os.path.basename(img_path)}", 3000)
+            self._update_ui_from_image()
+            self.history.push(self.layers.layers, self.layers.active_layer_id)
+
+        except Exception as e:
+            self.statusBar().showMessage(f"Error loading image: {e}", 5000)
+
+    # Override the existing _on_layer_changed to include UI updates
+    def _on_layer_changed(self):
+        self.canvas.set_image(self.layers.compose())
+        self._update_ui_from_image()
+        self.history.push(self.layers.layers, self.layers.active_layer_id)
+
+    # Override the existing _on_undo_redo to include UI updates
+    def _on_undo_redo(self, state):
+        self.layers.layers = state.layers
+        self.layers.active_layer_id = state.active_layer_id
+        self.canvas.set_image(self.layers.compose())
+        self._update_ui_from_image()
+
+    # Override the existing _on_ai_action to include UI updates
+    def _on_ai_action(self, action_name, params=None):
+        active_layer = self.layers.get_active_layer()
+        if not active_layer:
+            self.statusBar().showMessage("No active layer to apply AI action.", 3000)
+            return
+
+        self.canvas.show_ai_processing(f"Applying {action_name.replace("_", " ").title()}...")
+
+        def _run_ai():
+            try:
+                result_image = None
+                if action_name == "accent":
+                    result_image = AccentAI.apply(active_layer.image, params.get("intensity", 50))
+                elif action_name == "sky":
+                    result_image = SkyAI.replace_sky(active_layer.image, params.get("sky_type", "blue"), params.get("blend", 70))
+                elif action_name == "portrait":
+                    result_image = PortraitAI.apply(active_layer.image, params.get("skin_smooth", 50), params.get("eye_enhance", 30))
+                elif action_name == "bg_blur":
+                    result_image = BackgroundAI.blur_background(active_layer.image)
+                elif action_name == "hdr":
+                    result_image = HDRMergeAI.apply(active_layer.image, params.get("strength", 50))
+                elif action_name == "lens":
+                    result_image = LensAI.correct_distortion(active_layer.image, params.get("amount", 0))
+                    result_image = LensAI.correct_fringing(result_image, params.get("amount", 0))
+                elif action_name == "style":
+                    self.statusBar().showMessage("Style transfer requires a target style image. Not implemented yet.", 3000)
+                    result_image = active_layer.image
+                elif action_name == "wb":
+                    result_image = WhiteBalanceAI.auto_wb(active_layer.image)
+
+                if result_image is not None:
+                    new_layer = self.layers.add_layer(f"{active_layer.name} ({action_name.title()})", result_image, layer_type=\'pixel\')
+                    self.layers.set_active_layer(new_layer.id)
+                    self.canvas.set_image(self.layers.compose())
+                    self.history.push(self.layers.layers, self.layers.active_layer_id)
+                    self._update_ui_from_image()
+                    self.statusBar().showMessage(f"{action_name.title()} applied successfully.", 3000)
+                else:
+                    self.statusBar().showMessage(f"Failed to apply {action_name.title()}.")
+            except Exception as e:
+                self.statusBar().showMessage(f"Error applying {action_name.title()}: {e}", 5000)
+            finally:
+                self.canvas.hide_ai_processing()
+
+        self._ai_thread = QThread()
+        self._ai_worker = type("AIWorker", (QObject,), {
+            "run": _run_ai,
+            "finished": pyqtSignal(),
+            "error": pyqtSignal(str)
+        })()
+        self._ai_worker.moveToThread(self._ai_thread)
+        self._ai_thread.started.connect(self._ai_worker.run)
+        self._ai_worker.finished.connect(self._ai_thread.quit)
+        self._ai_worker.finished.connect(self._ai_worker.deleteLater)
+        self._ai_thread.finished.connect(self._ai_thread.deleteLater)
+        self._ai_worker.error.connect(lambda e: self.statusBar().showMessage(f"AI Error: {e}", 5000))
+        self._ai_thread.start()
+
+    # NEW: Function to update UI elements based on the current image
+    def _update_ui_from_image(self):
+        self._dominant_color_timer.start() # Trigger dynamic accent color update
+        self.canvas.fit_to_view()
+        self._update_layer_list()
+        self._update_adjustment_panel()
+        self._update_filter_panel()
+        self._update_curves_panel()
+
+    # Override the existing _on_file_loaded to include UI updates
+    def _on_file_loaded(self, img_path):
+        try:
+            img = cv2.imread(img_path)
+            if img is None:
+                raise ValueError("Could not load image.")
+            
+            # Clear existing layers and add the new image as a base layer
+            self.layers.clear()
+            self.layers.add_layer(os.path.basename(img_path), img)
+            self.canvas.set_image(self.layers.compose())
+            self.statusBar().showMessage(f"Loaded {os.path.basename(img_path)}", 3000)
+            self._update_ui_from_image()
+            self.history.push(self.layers.layers, self.layers.active_layer_id)
+
+        except Exception as e:
+            self.statusBar().showMessage(f"Error loading image: {e}", 5000)
+
+    # Override the existing _on_layer_changed to include UI updates
+    def _on_layer_changed(self):
+        self.canvas.set_image(self.layers.compose())
+        self._update_ui_from_image()
+        self.history.push(self.layers.layers, self.layers.active_layer_id)
+
+    # Override the existing _on_undo_redo to include UI updates
+    def _on_undo_redo(self, state):
+        self.layers.layers = state.layers
+        self.layers.active_layer_id = state.active_layer_id
+        self.canvas.set_image(self.layers.compose())
+        self._update_ui_from_image()
+
+    # Override the existing _on_ai_action to include UI updates
+    def _on_ai_action(self, action_name, params=None):
+        active_layer = self.layers.get_active_layer()
+        if not active_layer:
+            self.statusBar().showMessage("No active layer to apply AI action.", 3000)
+            return
+
+        self.canvas.show_ai_processing(f"Applying {action_name.replace("_", " ").title()}...")
+
+        def _run_ai():
+            try:
+                result_image = None
+                if action_name == "accent":
+                    result_image = AccentAI.apply(active_layer.image, params.get("intensity", 50))
+                elif action_name == "sky":
+                    result_image = SkyAI.replace_sky(active_layer.image, params.get("sky_type", "blue"), params.get("blend", 70))
+                elif action_name == "portrait":
+                    result_image = PortraitAI.apply(active_layer.image, params.get("skin_smooth", 50), params.get("eye_enhance", 30))
+                elif action_name == "bg_blur":
+                    result_image = BackgroundAI.blur_background(active_layer.image)
+                elif action_name == "hdr":
+                    result_image = HDRMergeAI.apply(active_layer.image, params.get("strength", 50))
+                elif action_name == "lens":
+                    result_image = LensAI.correct_distortion(active_layer.image, params.get("amount", 0))
+                    result_image = LensAI.correct_fringing(result_image, params.get("amount", 0))
+                elif action_name == "style":
+                    self.statusBar().showMessage("Style transfer requires a target style image. Not implemented yet.", 3000)
+                    result_image = active_layer.image
+                elif action_name == "wb":
+                    result_image = WhiteBalanceAI.auto_wb(active_layer.image)
+
+                if result_image is not None:
+                    new_layer = self.layers.add_layer(f"{active_layer.name} ({action_name.title()})", result_image, layer_type=\'pixel\')
+                    self.layers.set_active_layer(new_layer.id)
+                    self.canvas.set_image(self.layers.compose())
+                    self.history.push(self.layers.layers, self.layers.active_layer_id)
+                    self._update_ui_from_image()
+                    self.statusBar().showMessage(f"{action_name.title()} applied successfully.", 3000)
+                else:
+                    self.statusBar().showMessage(f"Failed to apply {action_name.title()}.")
+            except Exception as e:
+                self.statusBar().showMessage(f"Error applying {action_name.title()}: {e}", 5000)
+            finally:
+                self.canvas.hide_ai_processing()
+
+        self._ai_thread = QThread()
+        self._ai_worker = type("AIWorker", (QObject,), {
+            "run": _run_ai,
+            "finished": pyqtSignal(),
+            "error": pyqtSignal(str)
+        })()
+        self._ai_worker.moveToThread(self._ai_thread)
+        self._ai_thread.started.connect(self._ai_worker.run)
+        self._ai_worker.finished.connect(self._ai_thread.quit)
+        self._ai_worker.finished.connect(self._ai_worker.deleteLater)
+        self._ai_thread.finished.connect(self._ai_thread.deleteLater)
+        self._ai_worker.error.connect(lambda e: self.statusBar().showMessage(f"AI Error: {e}", 5000))
+        self._ai_thread.start()

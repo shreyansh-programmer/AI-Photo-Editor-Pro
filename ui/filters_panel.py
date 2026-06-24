@@ -172,14 +172,14 @@ class FiltersPanel(QWidget):
         # Strength slider
         strength_row = QHBoxLayout()
         lbl = QLabel("Strength")
-        lbl.setStyleSheet("color: #71717a; font-size: 11px;")
+        lbl.setObjectName("sliderLabel")
         strength_row.addWidget(lbl)
         self._strength = QSlider(Qt.Orientation.Horizontal)
         self._strength.setRange(0, 100)
         self._strength.setValue(100)
         strength_row.addWidget(self._strength, 1)
         self._strength_val = QLabel("100")
-        self._strength_val.setStyleSheet("color: #a78bfa; font-weight: 700;")
+        self._strength_val.setObjectName("sliderValue")
         self._strength.valueChanged.connect(lambda v: self._strength_val.setText(str(v)))
         strength_row.addWidget(self._strength_val)
         layout.addLayout(strength_row)
@@ -204,7 +204,7 @@ class FiltersPanel(QWidget):
 
         # Info label
         self._count_lbl = QLabel(f"Showing {len(FILTER_PRESETS)} filters")
-        self._count_lbl.setStyleSheet("color: #52525b; font-size: 10px;")
+        self._count_lbl.setStyleSheet("color: #9d174d; font-size: 10px; font-weight: 500;")
         layout.addWidget(self._count_lbl)
 
         # Virtualized List Widget for 1000+ items
@@ -213,12 +213,12 @@ class FiltersPanel(QWidget):
         self._list.setIconSize(QSize(72, 72))
         self._list.setGridSize(QSize(90, 110))
         self._list.setResizeMode(QListWidget.ResizeMode.Adjust)
-        self._list.setSpacing(8)
+        self._list.setSpacing(10)
         self._list.setStyleSheet("""
             QListWidget { background: transparent; border: none; outline: none; }
-            QListWidget::item { color: #d4d4d8; font-size: 10px; border-radius: 8px; padding: 4px; }
-            QListWidget::item:hover { background: rgba(255,255,255,0.05); }
-            QListWidget::item:selected { background: rgba(124,58,237,0.2); border: 1px solid rgba(124,58,237,0.4); color: #ffffff; }
+            QListWidget::item { color: #d4d4d8; font-size: 10px; border-radius: 8px; padding: 6px; transition: all 0.2s ease; }
+            QListWidget::item:hover { background: rgba(236, 72, 153, 0.1); transform: scale(1.05); }
+            QListWidget::item:selected { background: rgba(219, 39, 119, 0.25); border: 1px solid rgba(236, 72, 153, 0.5); color: #ffffff; }
         """)
         self._list.itemClicked.connect(self._on_item_clicked)
         layout.addWidget(self._list, 1)

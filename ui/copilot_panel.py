@@ -6,10 +6,12 @@ from PyQt6.QtGui import QIcon, QFont, QColor, QPalette
 from engine.copilot_engine import CopilotWorker
 
 class MessageBubble(QWidget):
+    """Enhanced message bubble with improved styling."""
     def __init__(self, text, is_user=False):
         super().__init__()
         layout = QHBoxLayout(self)
         layout.setContentsMargins(0, 4, 0, 4)
+        layout.setSpacing(8)
         
         bubble = QLabel(text)
         bubble.setWordWrap(True)
@@ -17,29 +19,16 @@ class MessageBubble(QWidget):
         
         # Glassmorphism styling for bubbles
         if is_user:
-            bubble.setStyleSheet("""
-                background: qlineargradient(x1:0, y1:0, x2:1, y2:1, stop:0 rgba(219, 39, 119, 0.4), stop:1 rgba(157, 23, 77, 0.6));
-                color: #fdf2f8;
-                border-radius: 12px;
-                border-top-right-radius: 2px;
-                padding: 10px 14px;
-                border: 1px solid rgba(244, 114, 182, 0.3);
-            """)
+            bubble.setObjectName("userBubble")
             layout.addStretch()
             layout.addWidget(bubble, 8)
         else:
-            bubble.setStyleSheet("""
-                background: qlineargradient(x1:0, y1:0, x2:1, y2:1, stop:0 rgba(40, 40, 45, 0.8), stop:1 rgba(20, 20, 25, 0.9));
-                color: #e4e4e7;
-                border-radius: 12px;
-                border-top-left-radius: 2px;
-                padding: 10px 14px;
-                border: 1px solid rgba(255, 255, 255, 0.1);
-            """)
+            bubble.setObjectName("assistantBubble")
             layout.addWidget(bubble, 8)
             layout.addStretch()
 
 class CopilotPanel(QWidget):
+    """Enhanced AI Copilot panel with improved UI and styling."""
     execute_command = pyqtSignal(str, str) # tool_name, value
     request_image = pyqtSignal() # Ask main window for current image
     
@@ -50,30 +39,30 @@ class CopilotPanel(QWidget):
         self._worker = None
         
         layout = QVBoxLayout(self)
-        layout.setContentsMargins(12, 12, 12, 12)
+        layout.setContentsMargins(14, 14, 14, 14)
         layout.setSpacing(12)
         
         # Header
         header = QLabel("🧠 AI Copilot")
-        header.setStyleSheet("color: #fbcfe8; font-size: 16px; font-weight: bold;")
+        header.setObjectName("copilotHeader")
         layout.addWidget(header)
         
         sub = QLabel("Powered by OpenRouter (Nemotron + Ring)")
-        sub.setStyleSheet("color: #a1a1aa; font-size: 11px;")
+        sub.setObjectName("copilotSubheader")
         layout.addWidget(sub)
         
         # Chat area
         self.scroll = QScrollArea()
         self.scroll.setWidgetResizable(True)
         self.scroll.setFrameShape(QFrame.Shape.NoFrame)
-        self.scroll.setStyleSheet("background: transparent;")
+        self.scroll.setObjectName("copilotChatArea")
         
         self.chat_container = QWidget()
         self.chat_container.setStyleSheet("background: transparent;")
         self.chat_layout = QVBoxLayout(self.chat_container)
         self.chat_layout.setAlignment(Qt.AlignmentFlag.AlignTop)
-        self.chat_layout.setContentsMargins(0,0,0,0)
-        self.chat_layout.setSpacing(8)
+        self.chat_layout.setContentsMargins(0, 0, 0, 0)
+        self.chat_layout.setSpacing(10)
         
         self.scroll.setWidget(self.chat_container)
         layout.addWidget(self.scroll, 1)
@@ -83,62 +72,37 @@ class CopilotPanel(QWidget):
         
         # Status
         self.status_lbl = QLabel("")
-        self.status_lbl.setStyleSheet("color: #f472b6; font-size: 11px; font-style: italic;")
+        self.status_lbl.setStyleSheet("color: #f472b6; font-size: 11px; font-style: italic; font-weight: 500;")
         self.status_lbl.hide()
         layout.addWidget(self.status_lbl)
         
         # Input area
         inp_layout = QHBoxLayout()
+        inp_layout.setSpacing(8)
+        
         self.inp_text = QLineEdit()
+        self.inp_text.setObjectName("copilotInput")
         self.inp_text.setPlaceholderText("Ask AI to edit...")
-        self.inp_text.setStyleSheet("""
-            QLineEdit {
-                background: rgba(20, 20, 25, 0.8);
-                border: 1px solid rgba(255,255,255,0.1);
-                border-radius: 16px;
-                padding: 8px 16px;
-                color: white;
-            }
-            QLineEdit:focus { border: 1px solid #db2777; }
-        """)
         self.inp_text.returnPressed.connect(self._send_message)
         inp_layout.addWidget(self.inp_text, 1)
         
         self.btn_send = QPushButton("➤")
-        self.btn_send.setFixedSize(32, 32)
-        self.btn_send.setStyleSheet("QPushButton { background: #db2777; color: white; border-radius: 16px; border: none; font-weight: bold; } QPushButton:hover { background: #be185d; }")
+        self.btn_send.setObjectName("copilotSendBtn")
+        self.btn_send.setFixedSize(36, 36)
         self.btn_send.clicked.connect(self._send_message)
         inp_layout.addWidget(self.btn_send)
         layout.addLayout(inp_layout)
         
         self.btn_analyze = QPushButton("👁️ Analyze Image")
-        self.btn_analyze.setStyleSheet("""
-            QPushButton { 
-                background: transparent; 
-                border: 1px solid rgba(219, 39, 119, 0.5); 
-                color: #fbcfe8; 
-                border-radius: 12px; 
-                padding: 6px; 
-            }
-            QPushButton:hover { background: rgba(219, 39, 119, 0.2); }
-        """)
+        self.btn_analyze.setObjectName("copilotAnalyzeBtn")
         self.btn_analyze.clicked.connect(self._analyze_image)
         
         self.btn_auto = QPushButton("✨ Auto-Pilot")
-        self.btn_auto.setStyleSheet("""
-            QPushButton { 
-                background: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 #db2777, stop:1 #9d174d);
-                border: none; 
-                color: #ffffff; 
-                border-radius: 12px; 
-                padding: 6px; 
-                font-weight: bold;
-            }
-            QPushButton:hover { background: #be185d; }
-        """)
+        self.btn_auto.setObjectName("copilotAutoPilotBtn")
         self.btn_auto.clicked.connect(self._auto_pilot)
         
         btn_layout = QHBoxLayout()
+        btn_layout.setSpacing(8)
         btn_layout.addWidget(self.btn_analyze)
         btn_layout.addWidget(self.btn_auto)
         layout.addLayout(btn_layout)

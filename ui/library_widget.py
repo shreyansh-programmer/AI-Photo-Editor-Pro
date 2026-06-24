@@ -1,6 +1,7 @@
 """
 Advance Editor - Library & Catalog System
 Provides a Lightroom-style grid view of photos in a directory.
+Enhanced with improved styling and visual consistency.
 """
 import os
 import cv2
@@ -39,7 +40,7 @@ class ThumbnailLoader(QThread):
             print(f"Error loading thumbnail for {self.filepath}: {e}")
 
 class LibraryWidget(QWidget):
-    """Grid view of images for the catalog."""
+    """Grid view of images for the catalog with enhanced styling."""
     photo_selected = pyqtSignal(str)  # Emits filepath when a photo is double clicked
     
     def __init__(self, parent=None):
@@ -57,10 +58,11 @@ class LibraryWidget(QWidget):
         folder_widget = QWidget()
         folder_widget.setFixedWidth(250)
         folder_layout = QVBoxLayout(folder_widget)
-        folder_layout.setContentsMargins(8, 8, 8, 8)
+        folder_layout.setContentsMargins(12, 12, 12, 12)
+        folder_layout.setSpacing(8)
         
         lbl = QLabel("FOLDERS")
-        lbl.setStyleSheet("color: #a1a1aa; font-weight: 600; font-size: 11px; letter-spacing: 1px;")
+        lbl.setObjectName("libraryFolderLabel")
         folder_layout.addWidget(lbl)
         
         self.file_model = QFileSystemModel()
@@ -75,33 +77,68 @@ class LibraryWidget(QWidget):
         self.tree.setColumnHidden(2, True)
         self.tree.setColumnHidden(3, True)
         self.tree.clicked.connect(self._on_folder_clicked)
-        self.tree.setStyleSheet("""
-            QTreeView { background: transparent; border: none; color: #d4d4d8; }
-            QTreeView::item:hover { background: rgba(255,255,255,0.05); }
-            QTreeView::item:selected { background: rgba(124,58,237,0.2); color: #fff; }
-        """)
         folder_layout.addWidget(self.tree)
         splitter.addWidget(folder_widget)
         
         # Right side: Grid
         grid_widget = QWidget()
         grid_layout = QVBoxLayout(grid_widget)
-        grid_layout.setContentsMargins(16, 16, 16, 16)
+        grid_layout.setContentsMargins(20, 20, 20, 20)
+        grid_layout.setSpacing(12)
         
         top_bar = QHBoxLayout()
+        top_bar.setSpacing(12)
         self.folder_label = QLabel("Select a folder to view photos")
-        self.folder_label.setStyleSheet("font-size: 18px; font-weight: bold; color: #fff;")
+        self.folder_label.setStyleSheet("""
+            font-size: 18px;
+            font-weight: bold;
+            color: #fbcfe8;
+            letter-spacing: 0.5px;
+        """)
         top_bar.addWidget(self.folder_label)
         top_bar.addStretch()
         
-        self.btn_sync = QPushButton("Sync Active Edits to All")
+        self.btn_sync = QPushButton("⚡ Sync Active Edits to All")
         self.btn_sync.setToolTip("Applies the current Develop settings to all photos in this folder")
-        self.btn_sync.setStyleSheet("background: #7c3aed; color: white; border: none; padding: 8px 16px; border-radius: 6px; font-weight: bold;")
+        self.btn_sync.setStyleSheet("""
+            QPushButton {
+                background: qlineargradient(x1:0, y1:0, x2:1, y2:1, stop:0 #7c3aed, stop:1 #6d28d9);
+                color: white;
+                border: none;
+                padding: 10px 16px;
+                border-radius: 8px;
+                font-weight: bold;
+                font-size: 12px;
+                transition: all 0.2s ease;
+            }
+            QPushButton:hover {
+                background: qlineargradient(x1:0, y1:0, x2:1, y2:1, stop:0 #8b5cf6, stop:1 #7c3aed);
+            }
+            QPushButton:pressed {
+                background: #6d28d9;
+            }
+        """)
         self.btn_sync.hide()  # Hidden until we have an active edit
         top_bar.addWidget(self.btn_sync)
         
-        btn_import = QPushButton("Import Photos")
+        btn_import = QPushButton("📁 Import Photos")
         btn_import.clicked.connect(self._choose_folder)
+        btn_import.setStyleSheet("""
+            QPushButton {
+                background: rgba(236, 72, 153, 0.12);
+                color: #fbcfe8;
+                border: 1px solid rgba(236, 72, 153, 0.3);
+                padding: 10px 16px;
+                border-radius: 8px;
+                font-weight: 600;
+                font-size: 12px;
+                transition: all 0.2s ease;
+            }
+            QPushButton:hover {
+                background: rgba(236, 72, 153, 0.2);
+                border-color: rgba(236, 72, 153, 0.5);
+            }
+        """)
         top_bar.addWidget(btn_import)
         grid_layout.addLayout(top_bar)
         
@@ -111,12 +148,6 @@ class LibraryWidget(QWidget):
         self.list_widget.setGridSize(QSize(220, 240))
         self.list_widget.setResizeMode(QListWidget.ResizeMode.Adjust)
         self.list_widget.setSpacing(16)
-        self.list_widget.setStyleSheet("""
-            QListWidget { background: #0c0c0f; border: none; outline: none; }
-            QListWidget::item { color: #d4d4d8; font-size: 12px; border-radius: 8px; padding: 8px; }
-            QListWidget::item:hover { background: rgba(255,255,255,0.05); }
-            QListWidget::item:selected { background: rgba(124,58,237,0.2); border: 2px solid #7c3aed; }
-        """)
         self.list_widget.itemDoubleClicked.connect(self._on_item_double_clicked)
         grid_layout.addWidget(self.list_widget)
         
@@ -156,7 +187,7 @@ class LibraryWidget(QWidget):
             item = QListWidgetItem(f)
             item.setData(Qt.ItemDataRole.UserRole, filepath)
             
-            # Placeholder
+            # Placeholder with gradient
             pix = QPixmap(200, 200)
             pix.fill(QColor(30, 30, 35))
             item.setIcon(QIcon(pix))
